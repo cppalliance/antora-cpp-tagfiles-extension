@@ -26,8 +26,8 @@
   "dependencies": {
     "@antora/expand-path-helper": "^2.0.0",
     "cache-directory": "^2.0.0",
-    "fast-xml-parser": "^4.4.1",
+    "fast-xml-parser": "^4.5.3",
     "he": "^1.2.0",
-    "isomorphic-git": "^1.27.1"
+    "isomorphic-git": "^1.33.2"
   }
 }
