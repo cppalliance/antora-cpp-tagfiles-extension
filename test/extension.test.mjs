@@ -15,6 +15,7 @@ import fs from 'fs'
 import CppTagfilesExtension from '../lib/extension.js'
 import {fileURLToPath} from 'url';
 import path from 'path';
+const TAGFILE_REGISTRY_STORE_SYMBOL = Symbol.for('cppReferenceTagfileRegistryStore')
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -25,7 +26,7 @@ class generatorContext {
     }
 
     on(eventName, Function) {
-        ok(eventName === 'contentAggregated' || eventName === 'beforeProcess')
+        ok(eventName === 'contentAggregated' || eventName === 'beforeProcess' || eventName === 'contentClassified')
     }
 
     getLogger(name) {
@@ -159,3 +160,91 @@ test('The extension produces links to C++ symbols', async (t) => {
     }
 
 });
+
+// Verifies that the tagfiles extension waits for the registry producer and
+// turns published entries into real tagfile definitions.
+test('consumeReferenceTagfileRegistry merges generated tagfiles', async () => {
+    const antoraContext = new generatorContext()
+    const playbook = {runtime: {}}
+    const extension = new CppTagfilesExtension(antoraContext, {config: {}, playbook})
+    const mockTagfilePath = path.resolve(__dirname, 'tagfiles/boost-url-doxygen.tag.xml')
+    let waitedForProducer = false
+    playbook.runtime.cppReferenceTagfileRegistry = {
+        schemaVersion: 1,
+        entries: [
+            {
+                component: 'url',
+                version: '1.0.0',
+                tagfilePath: mockTagfilePath,
+                docRootUrl: 'xref:reference:',
+                checksum: 'abc123'
+            }
+        ],
+        waitFor: async (producerId) => {
+            strictEqual(producerId, 'reference')
+            waitedForProducer = true
+        }
+    }
+    const normalizeBaseUrl = (baseUrl) => {
+        baseUrl = baseUrl ? baseUrl : ''
+        baseUrl = baseUrl.trim()
+        const isHttp = baseUrl.startsWith('http://') || baseUrl.startsWith('https://')
+        if (!baseUrl.endsWith('/') && isHttp) {
+            return baseUrl + '/'
+        }
+        return baseUrl
+    }
+    const externalAsBoolean = (tagfile) => {
+        const baseUrl = normalizeBaseUrl(tagfile.baseUrl)
+        const baseUrlIsHttp = baseUrl.startsWith('http://') || baseUrl.startsWith('https://')
+        if (typeof tagfile.external === 'boolean') {
+            return tagfile.external
+        }
+        if (typeof tagfile.external === 'string') {
+            return tagfile.external === 'true'
+        }
+        return baseUrlIsHttp
+    }
+    const entries = await extension.consumeReferenceTagfileRegistry(playbook, normalizeBaseUrl, externalAsBoolean)
+    ok(waitedForProducer, 'should wait for reference producer before consuming entries')
+    strictEqual(entries.length, 1)
+    strictEqual(entries[0].file, mockTagfilePath)
+    strictEqual(entries[0].component, 'url')
+    strictEqual(entries[0].baseUrl, 'xref:reference:')
+    strictEqual(entries[0].external, false)
+    ok(entries[0].doc, 'registry entries should include parsed tagfile docs')
+})
+
+test('consumeReferenceTagfileRegistry reads fallback store when runtime missing entry', async () => {
+    const antoraContext = new generatorContext()
+    const playbook = {runtime: {}}
+    const extension = new CppTagfilesExtension(antoraContext, {config: {}, playbook})
+    const store = globalThis[TAGFILE_REGISTRY_STORE_SYMBOL]
+    const simulatedRegistry = {
+        schemaVersion: 1,
+        entries: [{
+            component: null,
+            tagfilePath: path.resolve(__dirname, 'tagfiles/boost-core-doxygen.tag.xml'),
+            docRootUrl: 'https://example.com/'
+        }]
+    }
+    store.byObject.set(playbook, simulatedRegistry)
+    const entries = await extension.consumeReferenceTagfileRegistry(playbook, (v) => v, () => true)
+    strictEqual(entries.length, 1)
+    strictEqual(entries[0].file, simulatedRegistry.entries[0].tagfilePath)
+})
+
+test('consumeReferenceTagfileRegistry skips entries with missing files', async () => {
+    const antoraContext = new generatorContext()
+    const extension = new CppTagfilesExtension(antoraContext, {config: {}, playbook: {runtime: {}}})
+    const playbook = {runtime: {cppReferenceTagfileRegistry: {
+        schemaVersion: 1,
+        entries: [{
+            component: 'demo',
+            tagfilePath: path.resolve(__dirname, 'tagfiles/does-not-exist.tag.xml'),
+            docRootUrl: 'xref:reference:'
+        }]
+    }}}
+    const entries = await extension.consumeReferenceTagfileRegistry(playbook, (v) => v, () => false)
+    strictEqual(entries.length, 0)
+})

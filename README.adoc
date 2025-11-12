@@ -26,7 +26,7 @@ Install this extension
 
 [source,bash]
 ----
-npm i -D @alandefreitas/antora-cpp-tagfiles-extension
+npm i -D @cppalliance/antora-cpp-tagfiles-extension
 ----
 
 === Playbook
@@ -37,7 +37,7 @@ Append the following in your `antora-playbook.yaml`:
 ----
 antora:
   extensions:
-    - require: '@alandefreitas/antora-cpp-tagfiles-extension' # <1>
+    - require: '@cppalliance/antora-cpp-tagfiles-extension' # <1>
       cpp-tagfiles:
           files: # <2>
             - file: ./doc/tagfiles/boost-url-doxygen.tag.xml
@@ -55,7 +55,7 @@ antora:
             - boost::core
 ----
 
-* <1> `npm` package name: `@alandefreitas/antora-cpp-tagfiles-extension` (required)
+* <1> `npm` package name: `@cppalliance/antora-cpp-tagfiles-extension` (required)
 * <2> List of tagfiles to be used by the extension
 * <3> List of namespaces to be used by the extension
 
@@ -94,6 +94,20 @@ These tagfiles only affect the component where they are defined.
 
 The extension include the cppreference tagfile by default.
 Any unknown symbol in custom tagfiles will be searched in the cppreference tagfile.
+
+=== Using the reference extension
+
+When `@cppalliance/antora-cpp-reference-extension` (https://github.com/cppalliance/antora-cpp-reference-extension) is present in the same playbook the reference tagfile is registered automatically, so `cpp:` macros can link to the pages generated during the same build. If you override the module name via `module`, that module’s `xref:` prefix is carried along automatically and no extra configuration is necessary:
+
+[source,yaml]
+----
+antora:
+  extensions:
+    - require: '@cppalliance/antora-cpp-reference-extension'
+    - require: '@cppalliance/antora-cpp-tagfiles-extension'
+----
+
+You can still list extra tagfiles in the playbook or component descriptors if you need to point at other libraries, but the generated reference module is picked up automatically.
 
 == Features
 
