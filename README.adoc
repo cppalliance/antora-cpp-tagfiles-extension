@@ -129,6 +129,26 @@ This will render as plain text:
 
 Which renders as `unknown`.
 
+==== Missing symbols
+
+By default the extension renders missing symbols silently as simple monospace output.
+Set `missing-symbol-log-level` to any Antora log level (for example `info`, `warn`, or `error`) to emit a log entry while keeping the inline text the same.
+
+[source,yaml]
+----
+antora:
+  extensions:
+    - require: '@cppalliance/antora-cpp-tagfiles-extension'
+      cpp-tagfiles:
+        missing-symbol-log-level: warn
+        files:
+          - file: ./doc/tagfiles/boost-url-doxygen.tag.xml
+            base_url: 'xref:reference:'
+----
+
+Valid values are the standard Antora log levels: `trace`, `debug`, `info`, `warn`, `error`, and `fatal`.
+Use `silent` (or leave the option unset) to suppress logging entirely.
+
 === Fundamental types
 
 Fundamental types include links to cppreference:
@@ -406,4 +426,3 @@ This will render as a link to the `boost::urls::url_view_base::segments` class i
 ----
 `xref:reference:boost/urls/url_view_base/segments.adoc[URL segments]`
 ----
-

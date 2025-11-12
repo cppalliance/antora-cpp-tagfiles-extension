@@ -23,6 +23,14 @@ const __dirname = path.dirname(__filename);
 class generatorContext {
     constructor() {
         this.attributes = {}
+        this.logs = {
+            trace: [],
+            debug: [],
+            info: [],
+            warn: [],
+            error: [],
+            fatal: []
+        }
     }
 
     on(eventName, Function) {
@@ -31,14 +39,18 @@ class generatorContext {
 
     getLogger(name) {
         ok(name === 'cpp-tagfile-extension')
-        const noop = () => {
+        const track = (level) => {
+            return (message) => {
+                this.logs[level].push(message)
+            }
         }
         return {
-            trace: noop,
-            debug: noop,
-            info: noop,
-            warn: noop,
-            error: noop
+            trace: track('trace'),
+            debug: track('debug'),
+            info: track('info'),
+            warn: track('warn'),
+            error: track('error'),
+            fatal: track('fatal')
         }
     }
 }
@@ -94,20 +106,28 @@ function parseInput(input) {
     return {target, attr}
 }
 
+function loadAntoraFixture(mutateFn) {
+    const antoraConfigPath = path.resolve(__dirname, 'antoraConfig.json')
+    const antoraConfigFileContent = fs.readFileSync(antoraConfigPath, 'utf8')
+    const fixture = JSON.parse(antoraConfigFileContent)
+    fixture.playbook.dir = __dirname
+    for (let content of fixture.contentAggregate) {
+        for (let origin of content.origins) {
+            origin.worktree = path.resolve(__dirname, '..')
+        }
+    }
+    if (typeof mutateFn === 'function') {
+        mutateFn(fixture)
+    }
+    return fixture
+}
+
 
 test('The extension produces links to C++ symbols', async (t) => {
     // ============================================================
     // Create extension object
     // ============================================================
-    const antoraConfigPath = path.resolve(__dirname, 'antoraConfig.json')
-    const antoraConfigFileContent = fs.readFileSync(antoraConfigPath, 'utf8')
-    const {config, playbook, contentAggregate} = JSON.parse(antoraConfigFileContent)
-    playbook.dir = __dirname
-    for (let content of contentAggregate) {
-        for (let origin of content.origins) {
-            origin.worktree = path.resolve(__dirname, '..')
-        }
-    }
+    const {config, playbook, contentAggregate} = loadAntoraFixture()
     const antoraContext = new generatorContext()
     const extension = new CppTagfilesExtension(antoraContext, {config, playbook})
     await extension.onContentAggregated({playbook, contentAggregate})
@@ -160,6 +180,62 @@ test('The extension produces links to C++ symbols', async (t) => {
     }
 
 });
+
+test('Missing symbol behavior logging', async (t) => {
+    await t.test('Global log level promotes warnings', async () => {
+        const {config, playbook, contentAggregate} = loadAntoraFixture((fixture) => {
+            fixture.config.cppTagfiles.missingSymbolLogLevel = 'warn'
+        })
+        const context = new generatorContext()
+        const extension = new CppTagfilesExtension(context, {config, playbook})
+        await extension.onContentAggregated({playbook, contentAggregate})
+        const warnBefore = context.logs.warn.length
+        const output = extension.process({}, 'nonexistentSymbol', {})
+        strictEqual(output, 'nonexistentSymbol')
+        const warnAfter = context.logs.warn.length
+        strictEqual(warnAfter - warnBefore, 1)
+        const lastWarn = context.logs.warn[context.logs.warn.length - 1]
+        ok(lastWarn.includes('nonexistentSymbol'))
+        strictEqual(context.logs.error.length, 0)
+        // Same symbol should not duplicate warnings
+        extension.process({}, 'nonexistentSymbol', {})
+        strictEqual(context.logs.warn.length, warnAfter)
+    })
+
+    await t.test('Info log level is supported', async () => {
+        const {config, playbook, contentAggregate} = loadAntoraFixture((fixture) => {
+            fixture.config.cppTagfiles.missingSymbolLogLevel = 'info'
+        })
+        const context = new generatorContext()
+        const extension = new CppTagfilesExtension(context, {config, playbook})
+        await extension.onContentAggregated({playbook, contentAggregate})
+        const infoBefore = context.logs.info.length
+        extension.process({}, 'informativeMissingSymbol', {})
+        strictEqual(context.logs.info.length - infoBefore, 1)
+        strictEqual(context.logs.warn.length, 0)
+        strictEqual(context.logs.error.length, 0)
+    })
+
+    await t.test('Same symbol logs once across contexts', async () => {
+        const {config, playbook, contentAggregate} = loadAntoraFixture((fixture) => {
+            fixture.config.cppTagfiles.missingSymbolLogLevel = 'warn'
+        })
+        const context = new generatorContext()
+        const extension = new CppTagfilesExtension(context, {config, playbook})
+        await extension.onContentAggregated({playbook, contentAggregate})
+        const parent = {
+            document: {
+                getAttributes: () => ({'page-component-name': 'url'})
+            }
+        }
+        extension.process(parent, 'sharedMissingSymbol', {})
+        strictEqual(context.logs.warn.length, 1)
+        strictEqual(context.logs.error.length, 0)
+        extension.process({}, 'sharedMissingSymbol', {})
+        strictEqual(context.logs.warn.length, 1, 'should not log twice')
+        strictEqual(context.logs.error.length, 0)
+    })
+})
 
 // Verifies that the tagfiles extension waits for the registry producer and
 // turns published entries into real tagfile definitions.
