@@ -213,3 +213,6 @@ dist
 
 .idea/
 *.iml
+
+# Local working notes/scratch — not part of the project
+local/
