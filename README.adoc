@@ -149,6 +149,12 @@ antora:
 Valid values are the standard Antora log levels: `trace`, `debug`, `info`, `warn`, `error`, and `fatal`.
 Use `silent` (or leave the option unset) to suppress logging entirely.
 
+NOTE: Antora's `runtime.log.level` (default `warn`) filters log output independently of this option.
+For a level below `warn` (such as `info` or `debug`) to actually appear, Antora's log level must also be at or below it.
+For example, setting `runtime.log.level: warn` and `missing-symbol-log-level: info` will still suppress the missing symbol logs because the info level is below the runtime log level of warn.
+In this case, set `runtime.log.level: info` in the playbook or pass `--log-level info` on the command line.
+If you want missing-symbol notifications to show up with no extra Antora configuration, use `warn` because it's the default Antora log level.
+
 === Fundamental types
 
 Fundamental types include links to cppreference:
