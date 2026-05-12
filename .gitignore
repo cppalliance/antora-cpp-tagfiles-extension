@@ -216,3 +216,6 @@ dist
 
 # Local working notes/scratch — not part of the project
 local/
+
+# Local-only agent instructions
+AGENTS.md
