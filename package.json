@@ -1,6 +1,6 @@
 {
   "name": "@cppalliance/antora-cpp-tagfiles-extension",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "C++ Tagfiles Extension for Antora",
   "main": "lib/extension.js",
   "scripts": {
