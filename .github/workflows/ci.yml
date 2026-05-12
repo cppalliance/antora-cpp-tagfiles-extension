@@ -88,13 +88,16 @@ jobs:
           sed -i -E 's/^(#+ .*?) \{#_[^}]+\}$/\1/' README.md
 
 
+      # If this step fails with 403 "Two-factor authentication ... required",
+      # regenerate NPM_TOKEN as a granular token with "Bypass 2FA" enabled at
+      # https://www.npmjs.com/settings/~/tokens and update the repo secret:
+      #   gh secret set NPM_TOKEN --repo cppalliance/antora-cpp-tagfiles-extension
       - name: Publish NPM package
         if: env.IS_SEMVER_TAG == 'true'
         run: |
           npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
-        continue-on-error: true
 
       - name: Print npm error log
         if: env.IS_SEMVER_TAG == 'true' && failure()
